@@ -7,7 +7,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // The workflow passes the repository name, so renaming the repo cannot leave
   // the deployed page pointing at assets that are no longer there.
-  base: process.env.PAGES_BASE ?? '/acts-land-map/',
+  base: process.env.PAGES_BASE ?? '/apostles-sea-map/',
   css: { postcss: { plugins: [tailwindcss()] } },
   plugins: [react()],
   build: {
