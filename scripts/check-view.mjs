@@ -1,0 +1,95 @@
+// Checks the map view maths the pointer controls rely on.
+//
+//     node scripts/check-view.mjs
+//
+// The one claim worth pinning down is that zooming about a cursor leaves
+// whatever sits under it in place — the correction skips reprojection, so a
+// wrong sign or a missing term would only show as the map sliding out from
+// under the pointer.
+import assert from 'node:assert/strict';
+import { registerHooks } from 'node:module';
+
+// The app imports without file extensions, which Node's ESM resolver will not
+// do on its own. Type stripping handles the rest.
+registerHooks({
+  resolve: (spec, ctx, next) => next(spec.startsWith('.') && !spec.includes('.ts') ? `${spec}.ts` : spec, ctx),
+});
+const { DEM, DEM_NX, DEM_NY, BOUNDS } = await import('../app/dem.ts');
+const { EXAGGERATION, clampPan, elevationAt, groundAt, journeyLines, makeFrame, projectGeo, relief, zoomAbout } =
+  await import('../app/terrain.ts');
+
+const W = 1200;
+const H = 820;
+const at = (view, lon, lat) =>
+  projectGeo(lon, lat, relief(elevationAt(lon, lat)), makeFrame(view, W, H));
+
+const base = { rotation: -0.4, tilt: 0.78, zoom: 1, perspective: false, panX: 40, panY: -25 };
+
+// Markers and labels must sit on the drawn surface, not above it. A lift in
+// frame units is a fixed altitude rather than a fixed gap, so it grows as a
+// share of the relief whenever EXAGGERATION drops, and the pins start to hover.
+// Sampling at DEM nodes is exact: that is where drawScene puts the mesh.
+const step = { x: (BOUNDS.e - BOUNDS.w) / (DEM_NX - 1), y: (BOUNDS.n - BOUNDS.s) / (DEM_NY - 1) };
+for (const [i, j] of [[10, 10], [120, 40], [200, 90], [60, 120]]) {
+  const lon = BOUNDS.w + i * step.x;
+  const lat = BOUNDS.n - j * step.y;
+  const mesh = relief(DEM[j * DEM_NX + i]);
+  assert.equal(groundAt(lon, lat).toFixed(9), mesh.toFixed(9),
+    `anchor at ${lon.toFixed(2)}, ${lat.toFixed(2)} is off the mesh — a lift has crept back in`);
+}
+
+// A point under the cursor stays under it, zooming either way, in both projections.
+for (const perspective of [false, true]) {
+  for (const factor of [1.25, 1 / 1.25, 2.4, 0.5]) {
+    const view = { ...base, perspective };
+    const p = at(view, 35.23, 31.78); // Jerusalem
+    const after = at(zoomAbout(view, factor, p.x, p.y, W, H), 35.23, 31.78);
+    assert.ok(
+      Math.hypot(after.x - p.x, after.y - p.y) < 0.5,
+      `anchor drifted ${Math.hypot(after.x - p.x, after.y - p.y).toFixed(2)} px ` +
+        `at ×${factor}${perspective ? ' (perspective)' : ''}`,
+    );
+  }
+}
+
+// Zoom stays inside its limits, and a clamped zoom leaves the pan alone.
+const wayOut = zoomAbout({ ...base, zoom: 9 }, 4, 300, 300, W, H);
+assert.equal(wayOut.zoom, 9);
+assert.deepEqual([wayOut.panX, wayOut.panY], [base.panX, base.panY]);
+assert.equal(zoomAbout({ ...base, zoom: 0.8 }, 0.1, 300, 300, W, H).zoom, 0.7);
+
+// Pan is bounded either side of centre.
+assert.equal(clampPan(9999, W), W * 0.6);
+assert.equal(clampPan(-9999, H), -H * 0.6);
+
+// Each itinerary must resolve to a dense line that stays inside the frame —
+// the route layer draws them every frame with no clipping of its own.
+assert.equal(journeyLines.length, 4);
+for (const { key, line } of journeyLines) {
+  assert.ok(line.length > 60, `journey ${key} resampled to only ${line.length} points`);
+  for (const [lon, lat] of line) {
+    assert.ok(lon >= BOUNDS.w && lon <= BOUNDS.e && lat >= BOUNDS.s && lat <= BOUNDS.n,
+      `journey ${key} leaves the frame at ${lon.toFixed(2)}, ${lat.toFixed(2)}`);
+  }
+}
+
+// The hero note and the legend both quote the vertical exaggeration, and both
+// are translation keys, so the figure cannot be interpolated in. Check it here
+// instead, which keeps app/terrain.ts the only place to tune it.
+const { readFileSync } = await import('node:fs');
+const quoted = [
+  ['app/page.tsx', /垂直方向放大约 (\d+) 倍/],
+  ['app/page.tsx', /垂直放大 (\d+)×/],
+  ['app/en.json', /exaggerated about (\d+)×/],
+  ['app/en.json', /Measured elevation · (\d+)× vertical/],
+];
+for (const [file, re] of quoted) {
+  const hit = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').match(re);
+  assert.ok(hit, `${file} no longer quotes the vertical exaggeration as ${re}`);
+  assert.equal(Number(hit[1]), EXAGGERATION, `${file} says ${hit[1]}×, EXAGGERATION is ${EXAGGERATION}`);
+}
+
+console.log(
+  `ok — anchors sit on the mesh, ${EXAGGERATION}× exaggeration quoted consistently, ` +
+  `4 itineraries in frame, zoom holds within 0.5 px, limits and pan clamp hold`,
+);
