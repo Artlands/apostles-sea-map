@@ -5,6 +5,7 @@ import { journeys, places, themes, type JourneyKey, type Place, type ThemeFilter
 import { regionLabels, regions, peaks, seas } from './geo';
 import { toTraditional } from './zh-hant';
 import { toEnglish } from './en';
+import { placeVideo, videos } from './videos';
 import {
   clamp, clampPan, DRAFT_STRIDE, drawScene, elevationRange, groundAt, hypsometric, JOURNEY_TINT,
   makeFrame, normLat, normLon, project, regionAt, relief, STATUS_TINT, TILT, zoomAbout,
@@ -294,6 +295,13 @@ export default function Home() {
   // Closed to start with. The frame is 26° wide and the panel covers its eastern
   // third — Judaea, Syria, Cyprus — which is where the book begins.
   const [panelOpen, setPanelOpen] = useState(false);
+  /**
+   * Nothing is requested from YouTube until this is set. An iframe per panel
+   * would pull a player, its cookies and a few hundred kilobytes on every place
+   * you click, so the embed only exists once someone asks for it — and it is
+   * keyed by place id so moving to another site puts the poster back.
+   */
+  const [playing, setPlaying] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>(() => {
     const saved = typeof window !== 'undefined' && localStorage.getItem('script');
     return saved === 'hant' || saved === 'en' ? saved : 'hans';
@@ -306,6 +314,8 @@ export default function Home() {
   const frame: Frame = useMemo(() => makeFrame(view, size.width, size.height), [view, size]);
 
   const highlightRegion = useMemo(() => regionAt(active.lon, active.lat), [active]);
+
+  const video = placeVideo[active.id] ? videos[placeVideo[active.id]] : null;
 
   /**
    * Routes follow the filter: pick a journey and only that line is drawn bright.
@@ -665,6 +675,32 @@ export default function Home() {
             <p className="story-description">{active.description}</p>
             {active.reference && (
               <div className="reference"><small>经文索引</small><b>{active.reference}</b></div>
+            )}
+            {video && (
+              <div className="video">
+                {playing === active.id ? (
+                  <iframe
+                    className="video-frame"
+                    src={`https://www.youtube-nocookie.com/embed/${video.id}?autoplay=1&rel=0`}
+                    title={video.source}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <button className="video-open" onClick={() => setPlaying(active.id)}>
+                    <span className="video-play"><i /></span>
+                    <span className="video-name"><b>{video.title}</b><small>{video.source}</small></span>
+                  </button>
+                )}
+                <a
+                  className="video-credit"
+                  href={`https://www.youtube.com/watch?v=${video.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  影片来源 · BibleProject ↗
+                </a>
+              </div>
             )}
             {active.date && (
               <div className="date-row"><span>◷</span><div><small>时间线</small><b>{active.date}</b></div></div>

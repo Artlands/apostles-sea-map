@@ -57,8 +57,42 @@ CI runs all of these, and they are worth running before a commit:
 | --- | --- |
 | `npm run verify` | DEM grid alignment against surveyed landmarks, no dry land below sea level outside the Jordan rift, every place inside the frame, every journey stop resolving |
 | `npm run check:view` | markers sit *on* the mesh, cursor-anchored zoom holds within half a pixel in both projections, itineraries stay in frame, the exaggeration figure quoted in the prose matches `EXAGGERATION` |
+| `npm run check:videos` | every embedded video still resolves and still belongs to the BibleProject channel; every place it names exists; every video in the catalogue is used |
 | `npm run check:en` | every user-visible Chinese string has an English form in `app/en.json`, and nothing in the table is stale |
 | `npm run lint` | `tsc --noEmit` |
+
+## Videos
+
+Twenty-five of the sixty-three places carry a BibleProject video, from
+`app/videos.ts`. Acts is a book of journeys and BibleProject covers it as four
+narratives — Pentecost, then Acts 8–12, 13–20 and 21–28 — so those are stories of
+specific places rather than surveys. That is why they qualify where a book
+overview would not: an overview of Acts is no more a video about Philippi than an
+overview of Mark is a video about Gadara, and the two "Book of Acts Summary"
+videos are deliberately absent.
+
+A place earns one when its own passage sits inside a video's span *and* something
+actually happens there. The second half does most of the work: Amphipolis and
+Apollonia are "they passed through" (17:1), Samothrace and Neapolis are one verse
+of sailing (16:11), Syracuse and Rhegium are ports the ship touched on the way
+north. None of them get one. Each mapping carries the passage that earns it, so
+the pairing can be checked rather than trusted.
+
+The labels name the span — 使徒行传 13–20, not just a title — so a reader can see
+they are getting the leg of the journey rather than a film about that one town.
+
+Nothing is requested from YouTube until a reader asks for it. The panel shows a
+poster; the `<iframe>` is only created on click, and it is keyed by place id so
+moving to another site takes the player back down. The poster deliberately has no
+thumbnail — an image from `i.ytimg.com` would tell Google about everyone who
+merely opened a panel, which is the thing the lazy embed exists to avoid. The
+embed itself goes to `youtube-nocookie.com`.
+
+CI runs `check:videos` on every push but is not allowed to fail the build on it,
+since an outage at YouTube is no reason to stop shipping terrain.
+
+BibleProject is not affiliated with this map. The videos are embedded and
+credited in the panel, never rehosted.
 
 ## Layout
 
@@ -66,6 +100,7 @@ CI runs all of these, and they are worth running before a commit:
 app/dem.ts        generated elevation grid (base64 Int16, ~1.4 MB, ~375 KB gzipped)
 app/geo.ts        provinces, region labels, seas, peaks — hand-authored
 app/places.ts     the gazetteer and the four itineraries
+app/videos.ts     the BibleProject videos and which place each belongs to
 app/terrain.ts    projection, palette, sea mask, the canvas renderer
 app/page.tsx      the whole UI, one client component
 app/en.json       Chinese → English lookup, keyed by the simplified source text

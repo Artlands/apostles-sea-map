@@ -8,7 +8,7 @@
 // the runtime looks up a DOM text node.
 import { readFileSync } from 'node:fs';
 
-const SOURCES = ['app/page.tsx', 'app/places.ts', 'app/geo.ts'];
+const SOURCES = ['app/page.tsx', 'app/places.ts', 'app/geo.ts', 'app/videos.ts'];
 // Comments come out before anything is scanned. An apostrophe in English prose
 // ("each journey's route") otherwise opens a string literal as far as the regex
 // below is concerned, and every quote after it pairs up wrong — which loses real
