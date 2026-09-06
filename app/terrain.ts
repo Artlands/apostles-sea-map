@@ -233,8 +233,29 @@ function pointInRing(lon: number, lat: number, ring: [number, number][]) {
   return inside;
 }
 
+/**
+ * Bounding box per province, so the common case — a point nowhere near this
+ * ring — costs four comparisons instead of a walk round the polygon. The grid
+ * below runs this once per DEM node at module load, which is a hundred and
+ * thirty thousand points against eighteen rings.
+ */
+const regionBox = regions.map(({ ring }) => {
+  let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < w) w = x;
+    if (x > e) e = x;
+    if (y < s) s = y;
+    if (y > n) n = y;
+  }
+  return { w, e, s, n };
+});
+
 export function regionAt(lon: number, lat: number) {
-  for (let i = 0; i < regions.length; i++) if (pointInRing(lon, lat, regions[i].ring)) return i;
+  for (let i = 0; i < regions.length; i++) {
+    const b = regionBox[i];
+    if (lon < b.w || lon > b.e || lat < b.s || lat > b.n) continue;
+    if (pointInRing(lon, lat, regions[i].ring)) return i;
+  }
   return -1;
 }
 

@@ -12,13 +12,14 @@ is the journeys layer and a frame twenty times wider.
 
 ## The map at a glance
 
-* **Terrain** — NASA SRTM 90 m, sampled on a 0.1° (~11 km) grid, 32,886 nodes,
+* **Terrain** — GMRT, resampled onto a 0.05° (~5.5 km) grid, 130,771 nodes,
   drawn as a depth-sorted mesh with hillshading from the true surface gradient.
   Heights are exaggerated 20×; at this width they would otherwise be invisible.
-* **No coastline vector.** SRTM is a land model and reports open water as zero,
-  so the zero-metre contour *is* the shore. That is the one change that lets the
-  map span a sea full of islands without carrying a shapefile — the Israel map
-  needed a digitised coast because its frame had one monotone shoreline in it.
+* **No coastline vector.** The builder writes every negative elevation outside
+  the Jordan rift as zero, so the zero-metre contour *is* the shore. That is the
+  one change that lets the map span a sea full of islands without carrying a
+  shapefile — the Israel map needed a digitised coast because its frame had a
+  single monotone shoreline in it.
 * **Provinces** — hand-authored rings, tinted by standing (Italy, senatorial,
   imperial, client kingdom). They are generous blobs rather than surveyed
   borders, which is affordable because only dry cells are tinted: wherever a ring
@@ -37,9 +38,9 @@ npm run dev            # vite dev server
 npm run build:static   # static bundle into dist-static/
 ```
 
-`npm run build:dem` refetches `app/dem.ts` from the public OpenTopoData API. It
-paces itself at one call a second and takes about six minutes, and it only needs
-running if the bounds or the grid step change.
+`npm run build:dem` refetches `app/dem.ts` from the GMRT grid service — one
+request for the whole box, a few seconds. It only needs running if the bounds or
+the grid step change.
 
 `npm run build:zh` regenerates `app/zh-hant.ts` after any Chinese text changes —
 it derives a Simplified→Traditional table from OpenCC covering only this site's
@@ -59,7 +60,7 @@ CI runs all of these, and they are worth running before a commit:
 ## Layout
 
 ```
-app/dem.ts        generated elevation grid (base64 Int16, ~88 KB)
+app/dem.ts        generated elevation grid (base64 Int16, ~350 KB, ~100 KB gzipped)
 app/geo.ts        provinces, region labels, seas, peaks — hand-authored
 app/places.ts     the gazetteer and the four itineraries
 app/terrain.ts    projection, palette, sea mask, the canvas renderer
@@ -69,12 +70,24 @@ app/en.json       Chinese → English lookup, keyed by the simplified source tex
 
 ## Sources and caveats
 
-Elevation from [NASA SRTM](https://www.earthdata.nasa.gov/data/instruments/srtm)
-via [OpenTopoData](https://www.opentopodata.org/datasets/srtm/). Negative
-elevations outside the Jordan rift are floored at 1 m so that the Qattara
-Depression is not drawn as a lake.
+Elevation from [GMRT](https://www.gmrt.org/), the Global Multi-Resolution
+Topography synthesis, through its
+[GridServer](https://www.gmrt.org/services/index.html).
 
-At 11 km per grid cell, small islands vanish: four gazetteer sites — Cauda and
-its neighbours among them — land in what the model calls open water. Provincial
-borders and ancient place names are educational approximations, and the route
-lines show the order of travel, not surveyed tracks.
+The grid was 0.1° to begin with, off point-query elevation APIs. Those meter by
+the hundred-coordinate call — OpenTopoData allows a thousand a day, Open-Meteo
+starts refusing well before that — and 0.05° needs thirteen hundred calls, so
+the finer grid came with a change of source. GMRT serves a whole bounding box in
+one request, which is why the resolution is now a choice rather than a quota.
+
+GMRT carries bathymetry, so the sea arrives as real depth and the builder
+flattens it. Keep the rift box inland when changing it: an earlier one reached
+far enough north-west to take in open Mediterranean, and that seafloor was then
+preserved as if it were the Dead Sea, down to −1155 m. `npm run verify` now
+floors the whole grid at the Dead Sea's own depth to catch exactly that.
+
+Even at 5.5 km a cell the smallest islands are marginal — Cauda is about ten
+kilometres across — so a few gazetteer sites still land in what the grid calls
+open water; `verify` reports the count. Provincial borders and ancient place
+names are educational approximations, and the route lines show the order of
+travel, not surveyed tracks.

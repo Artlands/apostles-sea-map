@@ -516,7 +516,7 @@ export default function Home() {
         <div className="hero-copy">
           <div className="eyebrow"><span /> THE ACTS OF THE APOSTLES</div>
           <h1>从耶路撒冷<br />到<em>罗马</em></h1>
-          <p>地形取自 NASA SRTM 高程模型（按约 11 公里网格取样），海岸线由高程本身划出，行省疆界还原公元 50 年前后的格局。使徒行传是一部走出去的书：转动这片海，看保罗四段行程如何一次比一次远。</p>
+          <p>地形取自 GMRT 全球多分辨率地形合成数据集（按约 5.5 公里网格取样），海岸线由高程本身划出，行省疆界还原公元 50 年前后的格局。使徒行传是一部走出去的书：转动这片海，看保罗四段行程如何一次比一次远。</p>
           <button className="primary-button" onClick={() => document.querySelector('#map')?.scrollIntoView({ behavior: 'smooth' })}>
             开始探索 <span>↘</span>
           </button>
@@ -592,7 +592,7 @@ export default function Home() {
             <span>历史地理档案 · 02</span>
             <h2>使徒行传的世界</h2>
             <div className="terrain-stats">
-              30.0–42.5°N <i /> 11.5–37.5°E <i /> SRTM · 11 km 网格
+              30.0–42.5°N <i /> 11.5–37.5°E <i /> GMRT · 5.5 km 网格
             </div>
           </div>
 
@@ -701,14 +701,11 @@ export default function Home() {
         </div>
         <div className="source-note" id="sources">
           <p>
-            高程：NASA SRTM 90 米数字高程模型，按 0.1°（约 11 公里）网格取样，共 {'32,886'} 个采样点，经 opentopodata 公开接口获取。
-            海岸线不另取矢量，而是由高程模型本身划出：该模型把开阔水面记为零，因此零米等值线就是海岸。
-            约旦裂谷之外的负高程一律抬到 1 米，以免埃及的卡塔拉洼地被画成湖。
-            公元 50 年前后的行省疆界与古代地名为教育性近似；行程连线按使徒行传所记的停靠次序绘制，取两地之间的罗马大道或最合理的航路，并非实测轨迹。
+            高程：GMRT 全球多分辨率地形合成数据集，按 0.05°（约 5.5 公里）网格重采样，共 {'130,771'} 个采样点，由 GMRT 网格服务一次取得。 海岸线不另取矢量，而是由高程本身划出：该数据集含海底地形，建表时把约旦裂谷以外的负高程一律写为零，零米等值线便是海岸；陆地抬到至少 1 米，低平的海岸才不会被误判为水面。裂谷之内保留真实深度，死海与加利利海因此仍是水。 公元 50 年前后的行省疆界与古代地名为教育性近似；行程连线按使徒行传所记的停靠次序绘制，取两地之间的罗马大道或最合理的航路，并非实测轨迹。
           </p>
           <div>
-            <a href="https://www.earthdata.nasa.gov/data/instruments/srtm" target="_blank" rel="noreferrer">NASA SRTM ↗</a>
-            <a href="https://www.opentopodata.org/datasets/srtm/" target="_blank" rel="noreferrer">OpenTopoData ↗</a>
+            <a href="https://www.gmrt.org/" target="_blank" rel="noreferrer">GMRT ↗</a>
+            <a href="https://www.gmrt.org/services/index.html" target="_blank" rel="noreferrer">GMRT GridServer ↗</a>
           </div>
         </div>
       </section>

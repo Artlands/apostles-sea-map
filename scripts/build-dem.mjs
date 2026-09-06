@@ -2,84 +2,109 @@
 //
 //     node scripts/build-dem.mjs
 //
-// Source: NASA SRTM 90 m via the public OpenTopoData API, sampled on a 0.1°
-// (~11 km) grid over the eastern Mediterranean. That is coarse, but the frame is
-// 26° wide — this map is about the shape of a sea and the coasts around it, not
-// about single hillsides.
+// Source: GMRT, the Global Multi-Resolution Topography synthesis, which serves a
+// whole bounding box as one ESRI ASCII grid. That is the reason this map can
+// afford its resolution at all. The point-query elevation APIs meter by the
+// hundred-coordinate call — OpenTopoData allows a thousand calls a day and
+// Open-Meteo starts returning 429s well before that — so a grid this size costs
+// more than a day's quota there, and one request here.
 //
-// SRTM is a land model: it reports open water as null, which is written out as 0
-// and is what the renderer uses as its sea mask. Land that genuinely sits below
-// sea level would be swallowed by the same rule, so everything outside the
-// Jordan rift is floored at 1 m — the Dead Sea and the Sea of Galilee stay real
-// water, the Qattara Depression on the southern edge of the frame does not turn
-// into a lake.
+// GMRT returns whatever cell size its tier gives, so the grid is resampled onto
+// the STEP below. Ask for a tier at least as fine as STEP; `med` is about 0.018°
+// and covers a 0.05° target with room to spare.
 //
-// The public endpoint allows one call a second, so the run takes about six
-// minutes. It is polite to their server and it only has to happen when the grid
-// changes.
+// GMRT carries bathymetry, so open water comes back deeply negative. The
+// renderer wants water flat, so anything below zero outside the Jordan rift is
+// written as exactly 0 — that is the sea mask — and land is floored at 1 m so a
+// low-lying coast is never mistaken for water. Inside the rift the real depth is
+// kept, which is what holds the Dead Sea and the Sea of Galilee as water rather
+// than as holes in the map.
 import { writeFileSync } from 'node:fs';
 
 const BOUNDS = { w: 11.5, e: 37.5, s: 30.0, n: 42.5 };
-const STEP = 0.1;
+const STEP = 0.05;
+const TIER = 'med';
 const NX = Math.round((BOUNDS.e - BOUNDS.w) / STEP) + 1;
 const NY = Math.round((BOUNDS.n - BOUNDS.s) / STEP) + 1;
 
-/** Where a negative elevation is real water rather than a dry depression. */
-const RIFT = { w: 35.0, e: 36.0, s: 30.9, n: 33.3 };
+/**
+ * Where a negative elevation is real water rather than seafloor or a dry
+ * depression: the Dead Sea, the Jordan valley and the Sea of Galilee.
+ *
+ * Keep it inland. An earlier, looser box reached to 33.3°N and 35.0°E, which
+ * takes in open Mediterranean off the Lebanese coast — and every metre of that
+ * seafloor was then preserved as if it were the Dead Sea, down to −1155 m.
+ * verify-map-data.mjs now floors the whole grid at the Dead Sea's own depth so
+ * that mistake cannot come back quietly.
+ */
+const RIFT = { w: 35.25, e: 35.85, s: 30.9, n: 33.05 };
 
-const BATCH = 100; // the API's hard limit per request
-const PACE = 1100; // ms between calls — the endpoint allows one a second
+const url = 'https://www.gmrt.org/services/GridServer'
+  + `?minlongitude=${BOUNDS.w}&maxlongitude=${BOUNDS.e}`
+  + `&minlatitude=${BOUNDS.s}&maxlatitude=${BOUNDS.n}`
+  + `&format=esriascii&resolution=${TIER}&layer=topo`;
 
-const round = (n) => Math.round(n * 1e6) / 1e6;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+process.stdout.write(`fetching the ${TIER} tier… `);
+const res = await fetch(url);
+if (!res.ok) throw new Error(`GMRT returned HTTP ${res.status}`);
+const text = await res.text();
+console.log(`${(text.length / 1e6).toFixed(1)} MB`);
 
-async function fetchBatch(points) {
-  const locations = points.map((p) => `${round(p.lat)},${round(p.lon)}`).join('|');
-  const url = `https://api.opentopodata.org/v1/srtm90m?locations=${locations}`;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { results } = await res.json();
-      if (!Array.isArray(results) || results.length !== points.length) {
-        throw new Error(`expected ${points.length} values, got ${results?.length}`);
-      }
-      return results.map((r) => r.elevation);
-    } catch (err) {
-      if (attempt >= 7) throw err;
-      await sleep(Math.min(30_000, 2000 * 2 ** attempt));
-    }
+// --- Parse the ESRI ASCII header, then the values. Rows run north to south.
+const head = {};
+let cursor = 0;
+for (let i = 0; i < 6; i++) {
+  const end = text.indexOf('\n', cursor);
+  const [key, value] = text.slice(cursor, end).trim().split(/\s+/);
+  head[key.toLowerCase()] = Number(value);
+  cursor = end + 1;
+}
+const { ncols, nrows, xllcorner, yllcorner, cellsize, nodata_value: nodata } = head;
+const src = new Float32Array(ncols * nrows);
+{
+  let k = 0;
+  for (const token of text.slice(cursor).split(/\s+/)) {
+    if (token) src[k++] = Number(token);
   }
+  if (k !== src.length) throw new Error(`expected ${src.length} values, parsed ${k}`);
+}
+console.log(`grid ${ncols}×${nrows} at ${cellsize.toFixed(5)}° (~${(cellsize * 111).toFixed(1)} km)`);
+if (cellsize > STEP) {
+  throw new Error(`the ${TIER} tier is coarser than STEP ${STEP}° — ask for a finer tier`);
 }
 
-const cells = [];
+/** Bilinear sample of the source grid, in metres. */
+const sampleAt = (lon, lat) => {
+  const fx = Math.min(ncols - 1.001, Math.max(0, (lon - xllcorner) / cellsize));
+  // yllcorner is the southern edge, but row 0 of the data is the northern one.
+  const fy = Math.min(nrows - 1.001, Math.max(0, (yllcorner + (nrows - 1) * cellsize - lat) / cellsize));
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const i = y0 * ncols + x0;
+  const q = [src[i], src[i + 1], src[i + ncols], src[i + ncols + 1]];
+  // A nodata cell would poison the whole neighbourhood, so fall back to the
+  // nearest real value rather than averaging the sentinel in.
+  if (q.some((v) => v === nodata)) return q.find((v) => v !== nodata) ?? 0;
+  return (q[0] * (1 - tx) + q[1] * tx) * (1 - ty) + (q[2] * (1 - tx) + q[3] * tx) * ty;
+};
+
+const dem = new Int16Array(NX * NY);
 for (let j = 0; j < NY; j++) {
+  const lat = BOUNDS.n - j * STEP;
   for (let i = 0; i < NX; i++) {
-    cells.push({ lon: BOUNDS.w + i * STEP, lat: BOUNDS.n - j * STEP });
-  }
-}
-
-const batches = [];
-for (let k = 0; k < cells.length; k += BATCH) batches.push(cells.slice(k, k + BATCH));
-
-const dem = new Int16Array(cells.length);
-for (let b = 0; b < batches.length; b++) {
-  const started = Date.now();
-  const values = await fetchBatch(batches[b]);
-  values.forEach((metres, k) => {
-    const { lon, lat } = batches[b][k];
+    const lon = BOUNDS.w + i * STEP;
+    const v = sampleAt(lon, lat);
     const inRift = lon >= RIFT.w && lon <= RIFT.e && lat >= RIFT.s && lat <= RIFT.n;
-    const v = metres ?? 0;
-    dem[b * BATCH + k] = Math.round(v < 0 && !inRift ? 1 : v);
-  });
-  console.log(`${b + 1}/${batches.length} batches`);
-  await sleep(Math.max(0, PACE - (Date.now() - started)));
+    dem[j * NX + i] = inRift ? Math.round(v) : v < 0 ? 0 : Math.max(1, Math.round(v));
+  }
 }
 
 const b64 = Buffer.from(dem.buffer, dem.byteOffset, dem.byteLength).toString('base64');
 writeFileSync(new URL('../app/dem.ts', import.meta.url), `\
 // AUTO-GENERATED by scripts/build-dem.mjs — do not edit by hand.
-// NASA SRTM 90 m elevations on a ${STEP}° grid, via the OpenTopoData API.
+// GMRT elevations resampled onto a ${STEP}° grid. Water is written as 0.
 
 export const BOUNDS = { w: ${BOUNDS.w}, e: ${BOUNDS.e}, s: ${BOUNDS.s}, n: ${BOUNDS.n} };
 export const DEM_NX = ${NX};

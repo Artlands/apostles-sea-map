@@ -30,10 +30,12 @@ function elevation(lon, lat) {
        + (dem[i + NX] * (1 - tx) + dem[i + NX + 1] * tx) * ty;
 }
 
-// Ground truth from published survey figures. An 11 km grid smooths hard, so
+// Ground truth from published survey figures. A 5.5 km grid still smooths, so
 // these windows are wide — the point is to catch a misaligned or transposed
 // grid, not to second-guess the survey. The open-water rows are the strict
-// ones: the whole sea mask rests on water reading as exactly 0.
+// ones: the whole sea mask rests on water reading as exactly 0, and Malta is
+// the strict one the other way: at 11 km it was open water, and the island
+// coming back is what the finer grid bought.
 const landmarks = [
   ['Rome', 12.4823, 41.8930, 5, 250],
   ['Jerusalem ridge', 35.2345, 31.7784, 500, 900],
@@ -41,6 +43,7 @@ const landmarks = [
   ['Anatolian plateau at Iconium', 32.4930, 37.8710, 850, 1300],
   ['Pisidian highland', 31.1830, 38.3060, 850, 1600],
   ['Nile delta', 31.0000, 30.6000, 0, 60],
+  ['Malta', 14.4200, 35.8900, 20, 260],
   ['Libyan Sea, south of Crete', 24.0000, 34.0000, 0, 0],
   ['Open Aegean', 24.5000, 36.5000, 0, 0],
   ['Tyrrhenian Sea', 12.4000, 39.9000, 0, 0],
@@ -50,16 +53,23 @@ for (const [name, lon, lat, lo, hi] of landmarks) {
   assert.ok(v >= lo && v <= hi, `${name}: DEM says ${v.toFixed(0)} m, expected ${lo}..${hi}`);
 }
 
-// Nothing outside the rift may sit below sea level, or it would be painted as water.
-const rift = [];
+// Nothing outside the rift may sit below sea level, or it would be painted as
+// water — and nothing anywhere may go deeper than the floor of the Dead Sea.
+// The source carries bathymetry, so a rift box drawn a little too wide quietly
+// preserves open seafloor instead of masking it; the depth floor is what makes
+// that show up as a failure rather than as a trench in the Levant.
+const DEAD_SEA_FLOOR = -800;
 for (let j = 0; j < NY; j++) {
   for (let i = 0; i < NX; i++) {
-    if (dem[j * NX + i] < 0) rift.push([W + i * sx, N - j * sy]);
+    const v = dem[j * NX + i];
+    if (v >= 0) continue;
+    const lon = W + i * sx;
+    const lat = N - j * sy;
+    assert.ok(lon >= 35.25 && lon <= 35.85 && lat >= 30.9 && lat <= 33.05,
+      `below sea level outside the Jordan rift at ${lon.toFixed(2)}, ${lat.toFixed(2)}: ${v} m`);
+    assert.ok(v >= DEAD_SEA_FLOOR,
+      `${v} m at ${lon.toFixed(2)}, ${lat.toFixed(2)} is below the floor of the Dead Sea`);
   }
-}
-for (const [lon, lat] of rift) {
-  assert.ok(lon >= 35 && lon <= 36 && lat >= 30.9 && lat <= 33.3,
-    `below sea level outside the Jordan rift at ${lon.toFixed(1)}, ${lat.toFixed(1)}`);
 }
 
 // Every gazetteer entry must sit inside the frame and carry a unique id.
@@ -74,11 +84,12 @@ for (const [, id, lonS, latS] of rows) {
   assert.ok(!seen.has(id), `duplicate place id: ${id}`);
   seen.add(id);
   assert.ok(lon > W && lon < E && lat > S && lat < N, `${id} falls outside the map frame`);
-  // Small islands and harbour moles vanish at 11 km, so a site reading as water
-  // is expected — a great many of them doing so is a transposed coordinate.
+  // The smallest islands and the harbour moles are still below one cell at
+  // 5.5 km, so a site reading as water is expected — a great many of them doing
+  // so is a transposed coordinate.
   if (elevation(lon, lat) <= 0) afloat++;
 }
-assert.ok(afloat <= 18, `${afloat} places land in open water — check the coordinates`);
+assert.ok(afloat <= 10, `${afloat} places land in open water — check the coordinates`);
 
 // Every journey stop must name a real place, or a route would run to nowhere.
 const stops = [...places.matchAll(/stops: \[([\s\S]*?)\]/g)]
@@ -88,5 +99,5 @@ for (const id of stops) assert.ok(seen.has(id), `journey stop names an unknown p
 
 console.log(
   `ok — ${dem.length} DEM nodes, ${rows.length} places, ${stops.length} journey stops, ` +
-  `${afloat} sites the 11 km grid puts offshore`,
+  `${afloat} sites the grid puts offshore`,
 );
