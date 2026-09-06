@@ -10,8 +10,14 @@
 // more than a day's quota there, and one request here.
 //
 // GMRT returns whatever cell size its tier gives, so the grid is resampled onto
-// the STEP below. Ask for a tier at least as fine as STEP; `med` is about 0.018°
-// and covers a 0.05° target with room to spare.
+// the STEP below. Ask for a tier at least as fine as STEP, and preferably two or
+// three times finer so the resample has something to average: `high` is about
+// 0.0088° and covers the 0.025° target well. The tiers roughly double each time
+// — low 0.035°, med 0.018°, high 0.0088°, max 0.0044° — and so does the download,
+// which is 32 MB at `high`.
+//
+// Halving STEP quadruples the node count, the payload and the draw cost. Measure
+// before reaching for the next tier down.
 //
 // GMRT carries bathymetry, so open water comes back deeply negative. The
 // renderer wants water flat, so anything below zero outside the Jordan rift is
@@ -22,8 +28,8 @@
 import { writeFileSync } from 'node:fs';
 
 const BOUNDS = { w: 11.5, e: 37.5, s: 30.0, n: 42.5 };
-const STEP = 0.05;
-const TIER = 'med';
+const STEP = 0.025;
+const TIER = 'high';
 const NX = Math.round((BOUNDS.e - BOUNDS.w) / STEP) + 1;
 const NY = Math.round((BOUNDS.n - BOUNDS.s) / STEP) + 1;
 

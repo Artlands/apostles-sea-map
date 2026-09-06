@@ -304,6 +304,14 @@ export const journeyLines: { key: JourneyKey; line: [number, number][] }[] = jou
 const SUN = { x: -0.55, y: -0.7, z: 0.45 };
 const SUN_LEN = Math.hypot(SUN.x, SUN.y, SUN.z);
 
+/**
+ * Stride for the pass drawn while the view is still moving. The full mesh is
+ * half a million quads at 0.025°, far too many to redraw inside a drag, so the
+ * interactive pass aims at a fixed cell budget rather than a fixed stride:
+ * change the grid step and dragging stays exactly as responsive as it was.
+ */
+export const DRAFT_STRIDE = Math.max(1, Math.round(Math.sqrt((DEM_NX * DEM_NY) / 15_000)));
+
 export type SceneOptions = {
   stride: number;
   showRegions: boolean;

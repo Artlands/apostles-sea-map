@@ -6,8 +6,9 @@ import { regionLabels, regions, peaks, seas } from './geo';
 import { toTraditional } from './zh-hant';
 import { toEnglish } from './en';
 import {
-  clamp, clampPan, drawScene, elevationRange, groundAt, hypsometric, JOURNEY_TINT, makeFrame,
-  normLat, normLon, project, regionAt, relief, STATUS_TINT, TILT, zoomAbout, type Frame, type View,
+  clamp, clampPan, DRAFT_STRIDE, drawScene, elevationRange, groundAt, hypsometric, JOURNEY_TINT,
+  makeFrame, normLat, normLon, project, regionAt, relief, STATUS_TINT, TILT, zoomAbout,
+  type Frame, type View,
 } from './terrain';
 
 const STATUSES: { key: keyof typeof STATUS_TINT; name: string; note: string }[] = [
@@ -263,7 +264,7 @@ function TerrainCanvas({ view, size, showRegions, highlightRegion, showJourneys,
       drawScene(ctx, size.width, size.height, frame,
         { stride, showRegions, highlightRegion, showJourneys, activeJourney });
     // Coarse mesh right away so dragging stays responsive, full grid once it settles.
-    draw(3);
+    draw(DRAFT_STRIDE);
     const id = setTimeout(() => draw(1), 200);
     return () => clearTimeout(id);
   }, [view, size, showRegions, highlightRegion, showJourneys, activeJourney]);
@@ -516,7 +517,7 @@ export default function Home() {
         <div className="hero-copy">
           <div className="eyebrow"><span /> THE ACTS OF THE APOSTLES</div>
           <h1>从耶路撒冷<br />到<em>罗马</em></h1>
-          <p>地形取自 GMRT 全球多分辨率地形合成数据集（按约 5.5 公里网格取样），海岸线由高程本身划出，行省疆界还原公元 50 年前后的格局。使徒行传是一部走出去的书：转动这片海，看保罗四段行程如何一次比一次远。</p>
+          <p>地形取自 GMRT 全球多分辨率地形合成数据集（按约 2.8 公里网格取样），海岸线由高程本身划出，行省疆界还原公元 50 年前后的格局。使徒行传是一部走出去的书：转动这片海，看保罗四段行程如何一次比一次远。</p>
           <button className="primary-button" onClick={() => document.querySelector('#map')?.scrollIntoView({ behavior: 'smooth' })}>
             开始探索 <span>↘</span>
           </button>
@@ -592,7 +593,7 @@ export default function Home() {
             <span>历史地理档案 · 02</span>
             <h2>使徒行传的世界</h2>
             <div className="terrain-stats">
-              30.0–42.5°N <i /> 11.5–37.5°E <i /> GMRT · 5.5 km 网格
+              30.0–42.5°N <i /> 11.5–37.5°E <i /> GMRT · 2.8 km 网格
             </div>
           </div>
 
@@ -701,7 +702,7 @@ export default function Home() {
         </div>
         <div className="source-note" id="sources">
           <p>
-            高程：GMRT 全球多分辨率地形合成数据集，按 0.05°（约 5.5 公里）网格重采样，共 {'130,771'} 个采样点，由 GMRT 网格服务一次取得。 海岸线不另取矢量，而是由高程本身划出：该数据集含海底地形，建表时把约旦裂谷以外的负高程一律写为零，零米等值线便是海岸；陆地抬到至少 1 米，低平的海岸才不会被误判为水面。裂谷之内保留真实深度，死海与加利利海因此仍是水。 公元 50 年前后的行省疆界与古代地名为教育性近似；行程连线按使徒行传所记的停靠次序绘制，取两地之间的罗马大道或最合理的航路，并非实测轨迹。
+            高程：GMRT 全球多分辨率地形合成数据集，按 0.025°（约 2.8 公里）网格重采样，共 {'521,541'} 个采样点，由 GMRT 网格服务一次取得。 海岸线不另取矢量，而是由高程本身划出：该数据集含海底地形，建表时把约旦裂谷以外的负高程一律写为零，零米等值线便是海岸；陆地抬到至少 1 米，低平的海岸才不会被误判为水面。裂谷之内保留真实深度，死海与加利利海因此仍是水。 公元 50 年前后的行省疆界与古代地名为教育性近似；行程连线按使徒行传所记的停靠次序绘制，取两地之间的罗马大道或最合理的航路，并非实测轨迹。
           </p>
           <div>
             <a href="https://www.gmrt.org/" target="_blank" rel="noreferrer">GMRT ↗</a>

@@ -12,9 +12,12 @@ is the journeys layer and a frame twenty times wider.
 
 ## The map at a glance
 
-* **Terrain** — GMRT, resampled onto a 0.05° (~5.5 km) grid, 130,771 nodes,
+* **Terrain** — GMRT, resampled onto a 0.025° (~2.8 km) grid, 521,541 nodes,
   drawn as a depth-sorted mesh with hillshading from the true surface gradient.
   Heights are exaggerated 20×; at this width they would otherwise be invisible.
+  The full mesh takes about half a second to paint, so it is drawn once the view
+  settles; while you drag, a coarser pass aims at a fixed budget of ~15,000 cells
+  (`DRAFT_STRIDE`) so the grid step and the drag feel stay independent.
 * **No coastline vector.** The builder writes every negative elevation outside
   the Jordan rift as zero, so the zero-metre contour *is* the shore. That is the
   one change that lets the map span a sea full of islands without carrying a
@@ -60,7 +63,7 @@ CI runs all of these, and they are worth running before a commit:
 ## Layout
 
 ```
-app/dem.ts        generated elevation grid (base64 Int16, ~350 KB, ~100 KB gzipped)
+app/dem.ts        generated elevation grid (base64 Int16, ~1.4 MB, ~375 KB gzipped)
 app/geo.ts        provinces, region labels, seas, peaks — hand-authored
 app/places.ts     the gazetteer and the four itineraries
 app/terrain.ts    projection, palette, sea mask, the canvas renderer
@@ -79,6 +82,14 @@ the hundred-coordinate call — OpenTopoData allows a thousand a day, Open-Meteo
 starts refusing well before that — and 0.05° needs thirteen hundred calls, so
 the finer grid came with a change of source. GMRT serves a whole bounding box in
 one request, which is why the resolution is now a choice rather than a quota.
+
+Resolution is a single constant, `STEP` in `scripts/build-dem.mjs`. Halving it
+quadruples the node count, the payload and the draw cost — 0.05° was 130,771
+nodes and a 200 KB gzipped bundle, 0.025° is 521,541 and 485 KB — so measure
+before going further. Ask for a GMRT tier two or three times finer than `STEP`;
+the builder refuses a tier coarser than it. Hosting the grid as a separate binary
+asset instead of base64 in the bundle was measured and dropped: it saves about
+10% after gzip, which does not pay for making the DEM load asynchronously.
 
 GMRT carries bathymetry, so the sea arrives as real depth and the builder
 flattens it. Keep the rift box inland when changing it: an earlier one reached
