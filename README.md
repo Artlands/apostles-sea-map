@@ -4,7 +4,7 @@ A 3D relief map of the world the book of Acts moves through: 63 places, the four
 itineraries drawn over real terrain, and the Roman provinces as they stood
 around AD 50. Simplified Chinese, Traditional Chinese and English.
 
-It is a sibling of [messiah-land-map](https://github.com/Artlands/messiah-land-map)
+It is a sibling of [messiah-land-map](https://github.com/nullbotnone/messiah-land-map)
 and reuses most of its engine — the projection and the Google-Earth-style pointer
 controls, the canvas terrain renderer, the greedy label declutter, and the
 three-way script toggle that converts the DOM after each render. What is new here
